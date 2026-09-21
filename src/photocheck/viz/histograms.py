@@ -225,7 +225,9 @@ def plot_lens_histogram(
     counts = Counter(values)
     sorted_items = sorted(counts.items(), key=lambda x: x[1], reverse=True)
 
-    lens_names = [item[0][:30] for item in sorted_items]  # Truncate long names
+    from .timeline import _short_lens_mapping
+    short = _short_lens_mapping([name for name, _ in sorted_items])
+    lens_names = [short[name] for name, _ in sorted_items]
     photo_counts = [item[1] for item in sorted_items]
 
     return _plot_bar_chart(
@@ -273,11 +275,24 @@ def _plot_bar_chart(
     )
 
     if tick_labels is not None:
-        ax.set_xticks(range(len(tick_labels)))
-        ax.set_xticklabels(tick_labels, rotation=45, ha="right", color="#1a1a1a", fontsize=10)
+        labels = [str(v) for v in tick_labels]
     else:
-        ax.set_xticks(range(len(x_values)))
-        ax.set_xticklabels(x_values, rotation=45, ha="right", color="#1a1a1a", fontsize=10)
+        labels = ["%g" % v if isinstance(v, (int, float)) else str(v) for v in x_values]
+
+    # Short numeric labels stay horizontal so each one reads as a tick
+    # mark directly under its bar; rotated labels visually "hang" between
+    # bars. Long text labels (lens names) must keep the rotation.
+    longest = max((len(lab) for lab in labels if lab), default=0)
+    if longest > 6:
+        rotation, ha, fontsize = 45, "right", 10
+    else:
+        rotation, ha, fontsize = 0, "center", 9
+        if len(labels) > 22:
+            step = -(-len(labels) // 22)  # ceil division
+            labels = [lab if i % step == 0 else "" for i, lab in enumerate(labels)]
+
+    ax.set_xticks(range(len(x_values)))
+    ax.set_xticklabels(labels, rotation=rotation, ha=ha, color="#1a1a1a", fontsize=fontsize)
 
     # Tick params
     ax.tick_params(axis="y", colors="#1a1a1a", labelsize=10, length=0)
