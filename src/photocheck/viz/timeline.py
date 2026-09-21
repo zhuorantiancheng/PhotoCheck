@@ -475,7 +475,7 @@ def plot_timeline_by_lens_html(
     <style>
         body {{ font-family: Arial, sans-serif; margin: 8px 12px; }}
         #chart {{ width: 100%; height: 630px; }}
-        .legend-note {{ color: #666; font-size: 12px; margin-top: 10px; }}
+        .legend-note {{ color: #666; font-size: 12px; margin: 2px 0 0; text-align: center; }}
     </style>
 </head>
 <body>
