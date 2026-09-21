@@ -219,7 +219,7 @@ def plot_lens_histogram(
     )
 
     if not values:
-        print("No valid lens name data to plot")
+        print("No valid data to plot")
         return None
 
     counts = Counter(values)
@@ -230,11 +230,14 @@ def plot_lens_histogram(
     lens_names = [short[name] for name, _ in sorted_items]
     photo_counts = [item[1] for item in sorted_items]
 
+    # No xlabel: the rotated multi-line tick labels are self-explanatory,
+    # and any caption below them either overlaps the longest names or sits
+    # far off the bottom of the image.
     return _plot_bar_chart(
         range(len(lens_names)),
         photo_counts,
         title=title,
-        xlabel=xlabel,
+        xlabel=None,
         ylabel=ylabel,
         tick_labels=lens_names,
         filename=filename,
@@ -324,9 +327,13 @@ def _plot_bar_chart(
     plt.tight_layout()
     # Center the xlabel on the whole figure, not just the axes box:
     # default centering ignores the y-tick/ylabel strip on the left, so the
-    # xlabel reads as shifted right of the rendered image.
-    pos = ax.get_position()
-    ax.xaxis.set_label_coords((0.5 - pos.x0) / pos.width, -0.12)
+    # xlabel reads as shifted right of the rendered image. Skipped when
+    # there is no xlabel (lens-name charts keep their caption out of the
+    # rotated labels' way).
+    if xlabel:
+        pos = ax.get_position()
+        label_y = -0.12 if rotation == 0 else -0.30
+        ax.xaxis.set_label_coords((0.5 - pos.x0) / pos.width, label_y)
 
     saved_path = None
     if filename:
