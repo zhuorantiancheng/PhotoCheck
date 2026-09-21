@@ -258,7 +258,24 @@ def _plot_bar_chart(
         "PingFang SC", "Hiragino Sans GB", "sans-serif",
     ]
 
-    fig, ax = plt.subplots(figsize=(12, 6))
+    if tick_labels is not None:
+        labels = [str(v) for v in tick_labels]
+    else:
+        labels = ["%g" % v if isinstance(v, (int, float)) else str(v) for v in x_values]
+
+    # Short numeric labels stay horizontal so each one reads as a tick
+    # mark directly under its bar; rotated labels visually "hang" between
+    # bars. Long text labels (lens names) must keep the rotation.
+    longest = max((len(lab) for lab in labels if lab), default=0)
+    n = len(labels)
+    if longest > 6:
+        rotation, ha, fontsize = 45, "right", 10
+    else:
+        rotation, ha, fontsize = 0, "center", 9 if n <= 30 else 8
+
+    # Keep every bar labelled: widen the figure instead of thinning labels.
+    fig_width = max(12, min(26, n * 0.3)) if rotation == 0 else 12
+    fig, ax = plt.subplots(figsize=(fig_width, 6))
     fig.patch.set_facecolor("#fff")
     ax.set_facecolor("#fff")
 
@@ -273,23 +290,6 @@ def _plot_bar_chart(
         range(len(x_values)), counts,
         color="#1a1a1a", edgecolor="#1a1a1a", linewidth=0, width=0.7,
     )
-
-    if tick_labels is not None:
-        labels = [str(v) for v in tick_labels]
-    else:
-        labels = ["%g" % v if isinstance(v, (int, float)) else str(v) for v in x_values]
-
-    # Short numeric labels stay horizontal so each one reads as a tick
-    # mark directly under its bar; rotated labels visually "hang" between
-    # bars. Long text labels (lens names) must keep the rotation.
-    longest = max((len(lab) for lab in labels if lab), default=0)
-    if longest > 6:
-        rotation, ha, fontsize = 45, "right", 10
-    else:
-        rotation, ha, fontsize = 0, "center", 9
-        if len(labels) > 22:
-            step = -(-len(labels) // 22)  # ceil division
-            labels = [lab if i % step == 0 else "" for i, lab in enumerate(labels)]
 
     ax.set_xticks(range(len(x_values)))
     ax.set_xticklabels(labels, rotation=rotation, ha=ha, color="#1a1a1a", fontsize=fontsize)
