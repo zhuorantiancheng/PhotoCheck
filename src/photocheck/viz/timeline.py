@@ -426,8 +426,13 @@ def plot_timeline_by_lens_html(
             "y": pivot[col].tolist(),
             "type": "scatter",
             "mode": "lines+markers",
-            "fill": "tonexty" if i > 0 else "none",
-            "line": {"color": colors[i % len(colors)]},
+            # Native stacking instead of fill:"tonexty": with tonexty each
+            # trace fills down to whatever trace sits above it, so hiding
+            # one lens via the legend re-binds the fills of every trace
+            # above and their areas change color. A stackgroup restacks on
+            # toggle while every trace keeps its own color.
+            "stackgroup": "one",
+            "line": {"color": colors[i % len(colors)], "width": 1.5},
             "marker": {"size": 4},
         })
 
@@ -442,9 +447,15 @@ def plot_timeline_by_lens_html(
         },
         "yaxis": {"title": "Photo Count", "showgrid": True},
         "hovermode": "x unified",
-        "legend": {"orientation": "h", "y": -0.3, "x": 0.5, "xanchor": "center"},
-        "height": 700,
-        "margin": {"l": 60, "r": 30, "t": 60, "b": 180},
+        # Legend below the x-axis title (title sits just under the tick
+        # labels); yanchor top pins the first row at y so 4 rows of items
+        # extend downward into the reserved bottom margin.
+        "legend": {
+            "orientation": "h", "y": -0.42, "yanchor": "top",
+            "x": 0.5, "xanchor": "center", "font": {"size": 11},
+        },
+        "height": 800,
+        "margin": {"l": 60, "r": 30, "t": 60, "b": 250},
     }
 
     html_content = f"""<!DOCTYPE html>
