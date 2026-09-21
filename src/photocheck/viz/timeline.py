@@ -408,8 +408,10 @@ def plot_timeline_by_lens_html(
         print("No valid data for lens timeline plot")
         return None
 
-    # Convert period to string for JSON
-    x_labels = [str(p) for p in pivot.index]
+    # Convert period to timestamp for JSON; weekly PeriodIndex str() is
+    # "2025-05-12/2025-05-18" (far too wide for tick labels), so use the
+    # period start date and let Plotly's tickformat compress it.
+    x_labels = [ts.strftime("%Y-%m-%d") for ts in pivot.index.to_timestamp()]
 
     # Build traces data
     traces = []
@@ -448,20 +450,20 @@ def plot_timeline_by_lens_html(
             "title": "Date",
             "showgrid": True,
             "tickangle": -45,
-            "tickmode": "auto",
-            "nticks": 20,
+            "tickformat": "%y-%m",
+            "nticks": 14,
         },
         "yaxis": {"title": "Photo Count", "showgrid": True},
         "hovermode": "x unified",
         # Legend below the x-axis title (title sits just under the tick
-        # labels); yanchor top pins the first row at y so 4 rows of items
-        # extend downward into the reserved bottom margin.
+        # labels); yanchor top pins the first row at y so the rows extend
+        # downward into the reserved bottom margin.
         "legend": {
-            "orientation": "h", "y": -0.42, "yanchor": "top",
+            "orientation": "h", "y": -0.28, "yanchor": "top",
             "x": 0.5, "xanchor": "center", "font": {"size": 11},
         },
-        "height": 800,
-        "margin": {"l": 60, "r": 30, "t": 60, "b": 250},
+        "height": 630,
+        "margin": {"l": 60, "r": 30, "t": 60, "b": 150},
     }
 
     html_content = f"""<!DOCTYPE html>
@@ -471,8 +473,8 @@ def plot_timeline_by_lens_html(
     <title>Photo Count by Lens Over Time</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
-        body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        #chart {{ width: 100%; height: 700px; }}
+        body {{ font-family: Arial, sans-serif; margin: 8px 12px; }}
+        #chart {{ width: 100%; height: 630px; }}
         .legend-note {{ color: #666; font-size: 12px; margin-top: 10px; }}
     </style>
 </head>
