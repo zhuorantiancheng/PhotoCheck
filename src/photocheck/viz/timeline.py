@@ -1,5 +1,6 @@
 """Timeline visualizations for PhotoCheck."""
 
+import re
 from collections import Counter
 from datetime import datetime
 from typing import Optional
@@ -12,6 +13,46 @@ from ..core.models import PhotoMetadata
 
 
 plt.rcParams["axes.unicode_minus"] = False
+
+
+# Compact lens labels for legends: "<system/brand prefix> <focal range>",
+# e.g. "FE 200-600mm F5.6-6.3 G OSS" -> "FE 200-600". Full names make
+# stacked-chart legends overflow the plot area.
+_ZOOM_RE = re.compile(r"(\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?)\s*mm", re.I)
+_PRIME_RE = re.compile(r"(\d{2,3}(?:\.\d)?)\s*(?:mm\b|/)")  # "35/1.7", "50mm"
+
+
+def _shorten_lens_name(name: str) -> str:
+    """Compact lens label: leading brand/system words + focal range."""
+    m = _ZOOM_RE.search(name)
+    if m:
+        focal = re.sub(r"\s+", "", m.group(1))
+        prefix = name[: m.start()].strip()
+    else:
+        m = _PRIME_RE.search(name)
+        if not m:
+            return name[:24]
+        focal = m.group(1)
+        prefix = name[: m.start()].strip()
+    words = prefix.split()
+    if len(words) > 3:
+        words = words[-3:]
+    return " ".join(words + [focal])
+
+
+def _short_lens_mapping(lens_names: list[str]) -> dict[str, str]:
+    """Map full lens names to unique short labels.
+
+    On collision (two lenses shortening to the same label) the longer
+    original names are kept truncated, so distinct lenses never merge
+    in the chart.
+    """
+    mapping: dict[str, str] = {}
+    counts = Counter(_shorten_lens_name(n) for n in lens_names)
+    for name in lens_names:
+        short = _shorten_lens_name(name)
+        mapping[name] = short if counts[short] == 1 else name[:24]
+    return mapping
 
 
 def plot_timeline_scatter(
@@ -238,12 +279,15 @@ def plot_timeline_by_lens(
 
     # Collect valid data
     records = []
+    short_map = _short_lens_mapping(
+        [m.lens_name for m in metadata_list if m.lens_name is not None]
+    )
     for m in metadata_list:
         if m.error is not None or not is_valid_dt(m.datetime_original) or m.lens_name is None:
             continue
         records.append({
             "date": pd.Timestamp(m.datetime_original),
-            "lens": m.lens_name[:30],  # Truncate long names
+            "lens": short_map[m.lens_name],
         })
 
     if not records:
@@ -285,7 +329,13 @@ def plot_timeline_by_lens(
     plt.title(title, fontsize=14, fontweight="bold")
     plt.xlabel("Date", fontsize=12)
     plt.ylabel("Photo Count", fontsize=12)
-    plt.legend(loc="upper left", fontsize=8, ncol=2)
+    # Legend below the axes in multiple columns: with 9-11 long lens
+    # names, an in-axes legend squeezes the plot area to half its size.
+    plt.legend(
+        loc="upper center", bbox_to_anchor=(0.5, -0.14),
+        ncol=3, fontsize=8, frameon=False,
+        columnspacing=1.4, handlelength=1.6,
+    )
     plt.grid(alpha=0.3)
     plt.gcf().autofmt_xdate()
 
@@ -324,12 +374,15 @@ def plot_timeline_by_lens_html(
 
     # Collect valid data
     records = []
+    short_map = _short_lens_mapping(
+        [m.lens_name for m in metadata_list if m.lens_name is not None]
+    )
     for m in metadata_list:
         if m.error is not None or not is_valid_dt(m.datetime_original) or m.lens_name is None:
             continue
         records.append({
             "date": pd.Timestamp(m.datetime_original),
-            "lens": m.lens_name,
+            "lens": short_map[m.lens_name],
         })
 
     if not records:
