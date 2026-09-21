@@ -419,20 +419,26 @@ def plot_timeline_by_lens_html(
         "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
     ]
 
+    # Per-trace translucent fill to zero: every curve is independent, so
+    # toggling a lens via the legend removes exactly that trace. Stacked
+    # modes (fill:"tonexty", stackgroup) re-bind/re-stack the remaining
+    # traces on toggle, which reads as other lenses changing color/shape.
+    def _rgba(hex_color: str, alpha: float) -> str:
+        h = hex_color.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
     for i, col in enumerate(pivot.columns):
+        c = colors[i % len(colors)]
         traces.append({
             "name": col,
             "x": x_labels,
             "y": pivot[col].tolist(),
             "type": "scatter",
             "mode": "lines+markers",
-            # Native stacking instead of fill:"tonexty": with tonexty each
-            # trace fills down to whatever trace sits above it, so hiding
-            # one lens via the legend re-binds the fills of every trace
-            # above and their areas change color. A stackgroup restacks on
-            # toggle while every trace keeps its own color.
-            "stackgroup": "one",
-            "line": {"color": colors[i % len(colors)], "width": 1.5},
+            "fill": "tozeroy",
+            "fillcolor": _rgba(c, 0.18),
+            "line": {"color": c, "width": 1.5},
             "marker": {"size": 4},
         })
 
