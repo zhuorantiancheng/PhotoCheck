@@ -311,7 +311,10 @@ def _plot_bar_chart(
         )
 
     ax.set_title(title, fontsize=13, fontweight=500, color="#1a1a1a", loc="left", pad=15)
-    ax.set_xlabel(xlabel, fontsize=10, color="#888", labelpad=10)
+    # Left-aligned like the title: centering on the axes box makes the
+    # label drift right of the visible plot once the y-tick labels and
+    # tight bboxes are accounted for.
+    ax.set_xlabel(xlabel, fontsize=10, color="#888", labelpad=10, loc="left")
     ax.set_ylabel(ylabel, fontsize=10, color="#888", labelpad=10)
 
     # Subtle horizontal grid only
