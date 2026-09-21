@@ -53,6 +53,64 @@ EXIF_TAGS = {
 EXIF_TAGS[306] = ("0th", "datetime_modified")  # DateTime
 
 
+# 35mm-equivalent crop factors by camera model. The EXIF tag
+# FocalLengthIn35mmFilm (0xA405) is unreliable across brands: Nikon and
+# Canon APS-C bodies don't write it, Sony full-frame bodies don't write
+# it, and Sony APS-C bodies sometimes write 0 at long focal lengths.
+# When the tag does carry a plausible value it wins (the body computed
+# it with its real crop state, including in-body APS-C crop modes);
+# otherwise the effective factor is max(body, lens).
+CROP_FACTORS: dict[str, float] = {
+    # Sony E APS-C
+    "ILCE-6700": 1.5,
+    # Nikon Z DX
+    "NIKON Z 30": 1.5,
+    # Canon APS-C
+    "Canon EOS 60D": 1.6,
+    # Full-frame bodies: factor 1.0 keeps raw focal lengths
+    "ILCE-7CM2": 1.0,
+    "LEICA M11-P": 1.0,
+    "DC-S5M2": 1.0,
+}
+
+# Lens-name markers that mark a lens as APS-C, independent of body.
+# Deliberately NOT matching Sony's "E " prefix: Tamron full-frame lenses
+# such as "E 28-200mm F2.8-5.6 A071" (Di III) show up with an E prefix
+# in EXIF LensModel on Sony bodies, so the prefix is not trustworthy.
+APS_C_LENS_MARKERS: tuple[str, ...] = (
+    "DC DN",          # Sigma APS-C mirrorless (vs "DG DN" full-frame)
+    "Di III-A",       # Tamron APS-C mirrorless (vs "Di III" full-frame)
+    "DX ",            # Nikon DX (NIKKOR Z DX ...)
+    "EF-S",           # Canon APS-C DSLR
+    "E 17-70mm",      # Tamron 17-70 B070 for Sony E (Di III-A, EXIF name lacks it)
+    "E 70-350mm",     # Sony native APS-C E 70-350 G OSS
+)
+
+# Known full-frame lens markers that must override APS_C_LENS_MARKERS
+# (none currently shadow each other, kept for documentation).
+
+
+def crop_factor_for(camera_model: Optional[str], lens_name: Optional[str] = None) -> float:
+    """Effective crop factor: max of body factor and lens factor.
+
+    A full-frame body with an APS-C lens mounted (or an in-body APS-C
+    crop mode) captures an APS-C image, so the lens raises the factor
+    above the body's own; an APS-C body with any lens stays at the
+    body's factor. Unknown bodies/lenses default to 1.0.
+
+    Limitation: an in-body APS-C crop mode with a full-frame lens has no
+    portable EXIF marker; rely on FocalLengthIn35mmFilm when the body
+    writes it there (Sony APS-C bodies do).
+    """
+    body = CROP_FACTORS.get((camera_model or "").strip(), 1.0)
+    if body > 1.0:
+        return body
+    lens = lens_name or ""
+    if any(marker in lens for marker in APS_C_LENS_MARKERS):
+        return 1.5
+    return body
+
+
 # Pre-grouped by parent_key for faster lookups. Built once at import.
 # Maps parent_key -> list of (tag_id, field_name)
 _TAGS_BY_PARENT: dict[str, list[tuple[int, str]]] = {}
@@ -60,11 +118,17 @@ for _tag_id, (_parent, _field) in EXIF_TAGS.items():
     _TAGS_BY_PARENT.setdefault(_parent, []).append((_tag_id, _field))
 
 
-def _parse_rational(value: tuple) -> float:
-    """Parse a rational number tuple (numerator, denominator)."""
-    if value is None:
-        return None
-    return value[0] / value[1]
+def _parse_rational(value) -> Optional[float]:
+    """Parse an EXIF rational.
+
+    piexif returns a (num, den) tuple for RATIONAL tags but a plain int
+    for SHORT/LONG tags (e.g. FocalLengthIn35mmFilm) — handle both.
+    """
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, tuple) and len(value) == 2:
+        return value[0] / value[1]
+    return None
 
 
 def _parse_datetime(value: bytes) -> Optional[datetime]:
@@ -123,14 +187,11 @@ def extract_metadata(
 ) -> PhotoMetadata:
     """Extract EXIF metadata from a single image.
 
-    Focal-length resolution:
-    - If EXIF FocalLengthIn35mmFilm (0xA405) is present, use it directly
-      (manufacturer-reported 35mm-equivalent, most accurate).
-    - Otherwise use raw FocalLength as-is.
-
-    The crop_factor argument is preserved for API compatibility but
-    is no longer applied. Use FocalLengthIn35mmFilm in the EXIF instead
-    of guessing sensor format.
+    Focal-length resolution (35mm-equivalent):
+    - If EXIF FocalLengthIn35mmFilm (0xA405) carries a plausible non-zero
+      value, use it directly.
+    - Otherwise scale the raw FocalLength by the camera body's crop
+      factor (see CROP_FACTORS); unknown bodies default to 1.0.
 
     Args:
         image_path: Path to the image file.
@@ -211,10 +272,18 @@ def _populate_result(
             except Exception:
                 continue
 
-    # Use 35mm tag if present, else raw. No DB or crop_factor math.
-    if result.focal_length_35mm is not None:
+    # Focal-length resolution:
+    # 1. EXIF FocalLengthIn35mmFilm when it carries a plausible value
+    #    (the body computes it from its real crop state; Sony sometimes
+    #    writes 0 at long focal lengths — treat 0 as absent);
+    # 2. otherwise raw FocalLength scaled by the effective crop factor
+    #    (max of body and lens, see crop_factor_for).
+    if result.focal_length_35mm:
         result.focal_length = result.focal_length_35mm
+    elif raw_focal is not None:
+        factor = crop_factor_for(result.camera_model, result.lens_name)
+        result.focal_length = round(raw_focal * factor, 1) if factor != 1.0 else raw_focal
     else:
-        result.focal_length = raw_focal
+        result.focal_length = None
 
     return result
