@@ -230,14 +230,11 @@ def plot_lens_histogram(
     lens_names = [short[name] for name, _ in sorted_items]
     photo_counts = [item[1] for item in sorted_items]
 
-    # No xlabel: the rotated multi-line tick labels are self-explanatory,
-    # and any caption below them either overlaps the longest names or sits
-    # far off the bottom of the image.
     return _plot_bar_chart(
         range(len(lens_names)),
         photo_counts,
         title=title,
-        xlabel=None,
+        xlabel=xlabel,
         ylabel=ylabel,
         tick_labels=lens_names,
         filename=filename,
@@ -267,8 +264,9 @@ def _plot_bar_chart(
         labels = ["%g" % v if isinstance(v, (int, float)) else str(v) for v in x_values]
 
     # Short numeric labels stay horizontal so each one reads as a tick
-    # mark directly under its bar; rotated labels visually "hang" between
-    # bars. Long text labels (lens names) must keep the rotation.
+    # mark directly under its bar. Long text labels (lens names) rotate
+    # 45° with ha='right': each label's tail anchors at its own tick, so
+    # adjacent labels never collide (ha='left' makes neighbours overlap).
     longest = max((len(lab) for lab in labels if lab), default=0)
     n = len(labels)
     if longest > 6:
@@ -327,12 +325,11 @@ def _plot_bar_chart(
     plt.tight_layout()
     # Center the xlabel on the whole figure, not just the axes box:
     # default centering ignores the y-tick/ylabel strip on the left, so the
-    # xlabel reads as shifted right of the rendered image. Skipped when
-    # there is no xlabel (lens-name charts keep their caption out of the
-    # rotated labels' way).
+    # xlabel reads as shifted right of the rendered image. For rotated
+    # multi-line tick labels the label sinks below the deepest name.
     if xlabel:
         pos = ax.get_position()
-        label_y = -0.12 if rotation == 0 else -0.30
+        label_y = -0.12 if rotation == 0 else -0.42
         ax.xaxis.set_label_coords((0.5 - pos.x0) / pos.width, label_y)
 
     saved_path = None
